@@ -1,0 +1,123 @@
+import './styles/App.css';
+import Plotly from 'plotly.js-dist';
+import React, { useState, useEffect, useRef } from 'react';
+
+function App() {
+  const [expressions, setExpressions] = useState([]); //List of objects Expression
+  const [variables, setVariables] = useState({a: 5});
+  const plotRef = useRef(null);
+
+  function Expression() {
+    this.formula = "";
+    this.data = {x: [], y: [], mode: "", name: ""}; //Data for chart
+
+    this.setFormulaAndData = (formula) => { //Set Formula and Calculate Data
+      this.formula = formula;
+
+      let xValues = [];
+      let yValues = [];
+
+      try {
+      for (let x = -10; x <= 10; x += 0.1){
+        xValues.push(x);
+        yValues.push(eval(formula));
+      }
+
+        this.data.x = xValues;
+        this.data.y = yValues;
+        this.data.type = "scatter";
+        this.data.mode = "lines";
+        this.data.name = "f(x) = " + this.formula;
+      }
+      catch (error){
+        console.log("Non-formula");
+      }
+    }
+  }
+
+  const createExpression = () => {
+    const newExpression = new Expression();
+    setExpressions([...expressions ,newExpression]);
+
+    console.log("Create expression with ID:", expressions.length + 1);
+  };
+
+  const handleFormulaChange = (index, event) => {
+    const newExpressions = [...expressions];
+    newExpressions[index].setFormulaAndData(event.target.value);
+    setExpressions(newExpressions);
+
+    console.log("Index:", index);
+    console.log("Formula:", newExpressions[index].formula);
+  };
+
+  const deleteExpression = (index) => {
+    const newExpressions = [...expressions];
+    newExpressions.splice(index, 1);
+    setExpressions(newExpressions);
+
+    console.log("Deleted Expression Index: " + index);
+  };
+
+  useEffect(() => {
+    const dataChart = [];
+
+    try{
+      expressions.map((expression) => dataChart.push(expression.data));
+    }
+    catch{
+      console.log("Expressions don't exist");
+    }
+
+    const layout = {
+      title: 'Sample Line Chart'
+    };
+
+    Plotly.newPlot(plotRef.current, dataChart, layout);
+
+    return () => {
+      Plotly.purge(plotRef.current);
+    };
+  }, [expressions]);
+
+  return (
+    <div className="App" class = "w3-row">
+      <div class = "w3-col s12 m4 l4 w3-border-right w3-border-black">
+        <div class="w3-bar w3-red w3-theme-d5">
+          <button class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i>var.</button>
+          <button onClick={createExpression} class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i>f(x)</button>
+        </div>
+          <div style={{height: '92.5vh', overflow: 'scroll'}}>
+            {expressions.length > 0 ? <div class="w3-container">Functions:</div> : <></>}
+            {expressions.map((expression, index) =>
+            <div key={index}>
+              <input onChange={(event) => handleFormulaChange(index, event)}
+                class="w3-input" type="text"
+                placeholder="x*2 (x is necessary)"
+                value={expression.formula}/>
+              <span onClick={() => deleteExpression(index)} class="w3-button w3-right">&times;</span>
+            </div>
+            )}
+            <div class="w3-container">Variables:</div>
+            {Object.keys(variables).map((variable, index) =>
+            <div>{variable}</div>)}
+          </div>
+      </div>
+      <div class = "w3-col s12 m8 l8 w3-blue">
+        <div ref={plotRef} />
+      </div>
+    </div>
+  );
+}
+
+export default App;
+
+expressions.map((expression) => {
+        if(!expression.variable){
+          dataChart.push(expression.calculateFormula(variables));
+        } else {
+          const variableSplited = expression.formula.split("=").map(part => part.trim());
+          variables[variableSplited[0]] = variableSplited[1];
+          console.log(variableSplited[0] + " " + variableSplited[1]);
+        }
+      });
