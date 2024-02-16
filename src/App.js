@@ -89,18 +89,15 @@ function App() {
     const expressionFormulas = expressions.filter((expression) => !expression.variable);
 
     try{
-      expressions.map((expression) => {
-        if(!expression.variable){
-          dataChart.push(expression.calculateFormula(variables));
-        } else {
-          const variableSplited = expression.formula.split("=").map(part => part.trim());
+      expressionVariables.map((expression) => {
+        const variableSplited = expression.formula.split("=").map(part => part.trim());
           variables[variableSplited[0]] = variableSplited[1];
           console.log(variableSplited[0] + " " + variableSplited[1]);
-        }
-      });
+      })
+      expressionFormulas.map((expression) => dataChart.push(expression.calculateFormula(variables)));
     }
-    catch{
-      console.log("Expressions don't exist");
+    catch(error){
+      console.log("Expressions don't exist " + error);
     }
 
     const layout = {
@@ -116,12 +113,11 @@ function App() {
 
   return (
     <div className="App" class = "w3-row">
-      <div class = "w3-col s12 m4 l4 w3-border-right w3-border-black">
+      <div class = "w3-col s12 m4 l4 w3-border-right w3-border-black" style={{height: '100vh'}}>
         <div class="w3-bar w3-red w3-theme-d5">
-          <button class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i>var.</button>
-          <button onClick={createExpression} class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i>f(x)</button>
+          <button onClick={createExpression} class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i></button>
         </div>
-          <div style={{height: '92.5vh', overflow: 'scroll'}}>
+          <div style={{overflow: 'scroll'}}>
             {expressions.map((expression, index) =>
             <div key={index}>
               <input onChange={(event) => handleFormulaChange(index, event)}
