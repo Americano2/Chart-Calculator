@@ -1,59 +1,95 @@
 import './styles/App.css';
 import Plotly from 'plotly.js-dist';
-import { create, all } from 'mathjs'
+import { create, all, expression } from 'mathjs'
 import React, { useState, useEffect, useRef } from 'react';
 
-function Expression() {
-  this.formula = "";
-  this.variable = false;
+function Expression(){
+  this.expression = "";
+  this.dependencies = [];
+  this.type = "";
+  this.specialSymbol = "";
 
-  const testVariable = (formula) => {
-    const variableTest = new RegExp('(?<![xy])\\b[a-wz]+\\s*=\\s*-?\\d+\\s*(?:[*/]\\s*-?\\d+)?\\b');
+  const setSpecialSymbol = (symbol) => this.specialSymbol = symbol;
 
-    if(variableTest.test(formula)){
-      this.variable = true;
+  this.setExpression = (inputExpression) => this.expression = inputExpression;
+  this.setDependencies = (dependencies) => this.dependencies = dependencies;
+
+  this.determineType = (inputExpression) => {
+  //Types: linearFun; equationFun; linearVar; equationVar;
+    const expression = inputExpression;
+    let specialSymbol;
+
+    try{
+    if(expression.includes("=")){
+      let split = expression.split("=");
+      let splitTrim = split[0].trim();
+
+      if(expression.includes("x") || expression.includes("y")){
+        if(splitTrim.length === 1){
+          this.type = "linearFun"
+        } else if(splitTrim.length > 1){
+          this.type = "equationFun"
+        }
+
+        setSpecialSymbol("y");
+      } else {
+        if(splitTrim.length === 1){
+          this.type = "linearVar"
+        } else if(splitTrim.length > 1 && expression.includes("$")){
+          specialSymbol = expression.split("$");
+          setSpecialSymbol(specialSymbol[1]);
+          this.type = "equationVar";
+        }
+      }
     } else {
-      this.variable = false;
+      this.type = "linearFun";
+      console.log(this.type);
     }
+    } catch(error) {
+      console.log(error);
+    }
+  };
+
+  this.getExpression = () => this.expression;
+  this.getDependencies = () => this.dependencies;
+  this.getType = () => this.type;
+  this.getSpecialSymbol = () => this.specialSymbol;
+}
+
+function DataPrototype(){
+  this.x = [];
+  this.y = [];
+  this.mode = "lines";
+  this.name = "";
+
+  this.setXandY = (x, y) => {
+    this.x.push(x);
+    this.y.push(y);
   }
 
-  this.setFormula = (formula) => {
-    this.formula = formula;
-
-    testVariable(formula);
+  this.setMode = (mode) => {
+    this.mode = mode;
   }
 
-  this.calculateFormula = (scope = {}) => {
-    const config = { };
-    const math = create(all, config);
-    const data = {x: [], y: [], mode: "", name: ""}
-
-    try {
-      let xValues = [];
-      let yValues = [];
-
-      for (let x = -10; x <= 10; x += 0.1){
-        xValues.push(x);
-        scope.x = x;
-        yValues.push(math.evaluate(this.formula, scope));
-      }
-
-        data.x = xValues;
-        data.y = yValues;
-        data.type = "scatter";
-        data.mode = "lines";
-        data.name = "f(x) = " + this.formula;
-      }
-      catch (error){
-        console.log("Can't evaluate because:" + error);
-      }
-
-      return data; //Return data for Chart
+  this.setName = (name) => {
+    this.name = name;
   }
 }
 
 function App() {
-  const [expressions, setExpressions] = useState([]); //List of objects Expression
+  var nerdamer = require('nerdamer');
+
+  require('nerdamer/Algebra');
+  require('nerdamer/Calculus');
+  require('nerdamer/Solve');
+  require('nerdamer/Extra');
+
+  const config = { };
+  const math = create(all, config);
+  const parser = math.parser();
+
+  const [expressions, setExpressions] = useState([]); //List of Expression
+  const [rangeAndStepX, setRangeAndStepX] = useState([-10, 10, 0.1]); // 0 - minX 1-maxX 2-stepX
   const plotRef = useRef(null); //Ref for display Chart
 
   const createExpression = () => {
@@ -64,52 +100,84 @@ function App() {
   };
 
   const handleFormulaChange = (index, event) => {
+    const inputExpression = event.target.value;
     const newExpressions = [...expressions];
-    newExpressions[index].setFormula(event.target.value);
+
+    newExpressions[index].setExpression(inputExpression);
+    newExpressions[index].determineType(inputExpression);
+
     setExpressions(newExpressions);
 
-    console.log("Index:", index);
-    console.log("Formula:", newExpressions[index].formula);
-    console.log("Variable?:", newExpressions[index].variable);
+    console.log(expressions);
+
+    console.log("Formula: " +  newExpressions[index].getExpression() + " Dependencies: " + newExpressions[index].getDependencies() + " Type: " + newExpressions[index].getType() + " Special Symbol: " + newExpressions[index].getSpecialSymbol());
   };
 
   const deleteExpression = (index) => {
     const newExpressions = [...expressions];
+
     newExpressions.splice(index, 1);
+
     setExpressions(newExpressions);
 
     console.log("Deleted Expression Index: " + index);
   };
 
-  useEffect(() => {
+  const calculateData = (arrayExpression = []) => {
     const dataChart = [];
-    const variables = {};
-
-    const expressionVariables = expressions.filter((expression) => expression.variable);
-    const expressionFormulas = expressions.filter((expression) => !expression.variable);
 
     try{
-      expressionVariables.map((expression) => {
-        const variableSplited = expression.formula.split("=").map(part => part.trim());
-          variables[variableSplited[0]] = variableSplited[1];
-          console.log(variableSplited[0] + " " + variableSplited[1]);
-      })
-      expressionFormulas.map((expression) => dataChart.push(expression.calculateFormula(variables)));
-    }
-    catch(error){
-      console.log("Expressions don't exist " + error);
+    arrayExpression.map((expression) => {
+      switch(expression.getType()){
+        case "linearVar":{
+          let a = parser.evaluate(expression.getExpression());
+          console.log(a);
+          break;
+        }
+        case "equationVar":{
+          let uncorrectedExpression = expression.getExpression();
+          let correctedExpression = uncorrectedExpression.split("$");
+
+          let a = nerdamer(correctedExpression[0], parser.getAll());
+          let sol = nerdamer.solveEquations(a.toString(), expression.getSpecialSymbol());
+          console.log(sol.toString());
+          break;
+        }
+        case "linearFun":{
+          let y = parser.evaluate(expression.getExpression());
+          console.log(y);
+          break;
+        }
+        case "equationFun":{
+          let a = nerdamer(expression.getExpression(), parser.getAll());
+          let sol = nerdamer.solveEquations(a.toString(), 'y');
+          console.log(sol.toString());
+          break;
+        }
+      }
+    })
+    } catch(error) {
+      console.log(error);
     }
 
-    const layout = {
-      title: 'Sample Line Chart'
-    };
+    return dataChart;
+  }
 
-    Plotly.newPlot(plotRef.current, dataChart, layout);
+  useEffect(() => { //Function for display chart
+    let config = {responsive: true};
+
+    let layout = {};
+
+    calculateData(expressions);
+
+    const dataChart = {};
+
+    Plotly.newPlot(plotRef.current, dataChart, layout, config);
 
     return () => {
       Plotly.purge(plotRef.current);
     };
-  }, [expressions]);
+  }, [expressions, rangeAndStepX]);
 
   return (
     <div className="App" class = "w3-row">
@@ -117,20 +185,20 @@ function App() {
         <div class="w3-bar w3-red w3-theme-d5">
           <button onClick={createExpression} class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i></button>
         </div>
-          <div style={{overflow: 'scroll'}}>
+          <div style={{height: '92.5vh' ,overflow: 'scroll'}}>
             {expressions.map((expression, index) =>
             <div key={index}>
               <input onChange={(event) => handleFormulaChange(index, event)}
                 class="w3-input" type="text"
                 placeholder="x*2 (x is necessary)"
-                value={expression.formula}/>
+                value={expression.expression}/>
               <span onClick={() => deleteExpression(index)} class="w3-button w3-right">&times;</span>
             </div>
             )}
           </div>
       </div>
       <div class = "w3-col s12 m8 l8 w3-blue">
-        <div ref={plotRef} />
+        <div ref={plotRef} id="chartView" style={{height: '100vh'}} />
       </div>
     </div>
   );

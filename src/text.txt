@@ -1,39 +1,65 @@
 import './styles/App.css';
 import Plotly from 'plotly.js-dist';
+import { create, all } from 'mathjs'
 import React, { useState, useEffect, useRef } from 'react';
 
-function App() {
-  const [expressions, setExpressions] = useState([]); //List of objects Expression
-  const [variables, setVariables] = useState({a: 5});
-  const plotRef = useRef(null);
+const config = { };
+const math = create(all, config);
 
-  function Expression() {
-    this.formula = "";
-    this.data = {x: [], y: [], mode: "", name: ""}; //Data for chart
+function Expression() {
+  this.formula = "";
+  this.variable = false;
 
-    this.setFormulaAndData = (formula) => { //Set Formula and Calculate Data
-      this.formula = formula;
+  const testVariable = (formula) => {
+    const variableTest = new RegExp('(?<![xy])\\b[a-wz]+\\s*=\\s*-?\\d+\\s*(?:[*/]\\s*-?\\d+)?\\b');
 
+    if(variableTest.test(formula)){
+      this.variable = true;
+    } else {
+      this.variable = false;
+    }
+  }
+
+  this.setFormula = (formula) => {
+    this.formula = formula;
+
+    testVariable(formula);
+  }
+
+  this.calculateVariable = (variables = {}) => {
+    return math.evaluate(this.formula);
+  }
+
+  this.calculateFormula = (variables = {}) => {
+    const data = {x: [], y: [], mode: "", name: ""}
+
+    try {
       let xValues = [];
       let yValues = [];
 
-      try {
       for (let x = -10; x <= 10; x += 0.1){
         xValues.push(x);
-        yValues.push(eval(formula));
+        variables.x = x;
+        yValues.push(math.evaluate(this.formula, variables));
       }
 
-        this.data.x = xValues;
-        this.data.y = yValues;
-        this.data.type = "scatter";
-        this.data.mode = "lines";
-        this.data.name = "f(x) = " + this.formula;
+        data.x = xValues;
+        data.y = yValues;
+        data.type = "scatter";
+        data.mode = "lines";
+        data.name = "f(x) = " + this.formula;
       }
       catch (error){
-        console.log("Non-formula");
+        console.log("Can't evaluate because:" + error);
       }
-    }
+
+      return data; //Return data for Chart
   }
+}
+
+function App() {
+  const [expressions, setExpressions] = useState([]); //List of objects Expression
+  const plotRef = useRef(null); //Ref for display Chart
 
   const createExpression = () => {
     const newExpression = new Expression();
@@ -44,11 +70,13 @@ function App() {
 
   const handleFormulaChange = (index, event) => {
     const newExpressions = [...expressions];
-    newExpressions[index].setFormulaAndData(event.target.value);
+    newExpressions[index].setFormula(event.target.value);
+
     setExpressions(newExpressions);
 
     console.log("Index:", index);
     console.log("Formula:", newExpressions[index].formula);
+    console.log("Variable?:", newExpressions[index].variable);
   };
 
   const deleteExpression = (index) => {
@@ -59,18 +87,26 @@ function App() {
     console.log("Deleted Expression Index: " + index);
   };
 
-  useEffect(() => {
+  useEffect(() => { //Function for display chart
     const dataChart = [];
+    const variables = {};
+
+    const expressionVariables = expressions.filter((expression) => expression.variable);
+    const expressionFormulas = expressions.filter((expression) => !expression.variable);
 
     try{
-      expressions.map((expression) => dataChart.push(expression.data));
+      expressionVariables.map((expression) => {
+          const variableSplited = expression.formula.split("=").map(part => part.trim());
+          variables[variableSplited[0]] = variableSplited[1];
+          console.log(variableSplited[0] + " " + variableSplited[1]);
+      })
+      expressionFormulas.map((expression) => dataChart.push(expression.calculateFormula(variables)));
     }
-    catch{
-      console.log("Expressions don't exist");
+    catch(error){
+      console.log("Expressions don't exist " + error);
     }
 
     const layout = {
-      title: 'Sample Line Chart'
     };
 
     Plotly.newPlot(plotRef.current, dataChart, layout);
@@ -82,13 +118,11 @@ function App() {
 
   return (
     <div className="App" class = "w3-row">
-      <div class = "w3-col s12 m4 l4 w3-border-right w3-border-black">
+      <div class = "w3-col s12 m4 l4 w3-border-right w3-border-black" style={{height: '100vh'}}>
         <div class="w3-bar w3-red w3-theme-d5">
-          <button class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i>var.</button>
-          <button onClick={createExpression} class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i>f(x)</button>
+          <button onClick={createExpression} class="w3-button w3-bar-item w3-right"><i class="material-icons">add</i></button>
         </div>
-          <div style={{height: '92.5vh', overflow: 'scroll'}}>
-            {expressions.length > 0 ? <div class="w3-container">Functions:</div> : <></>}
+          <div style={{height: '92.5vh' ,overflow: 'scroll'}}>
             {expressions.map((expression, index) =>
             <div key={index}>
               <input onChange={(event) => handleFormulaChange(index, event)}
@@ -98,9 +132,6 @@ function App() {
               <span onClick={() => deleteExpression(index)} class="w3-button w3-right">&times;</span>
             </div>
             )}
-            <div class="w3-container">Variables:</div>
-            {Object.keys(variables).map((variable, index) =>
-            <div>{variable}</div>)}
           </div>
       </div>
       <div class = "w3-col s12 m8 l8 w3-blue">
@@ -112,12 +143,135 @@ function App() {
 
 export default App;
 
-expressions.map((expression) => {
-        if(!expression.variable){
-          dataChart.push(expression.calculateFormula(variables));
-        } else {
-          const variableSplited = expression.formula.split("=").map(part => part.trim());
-          variables[variableSplited[0]] = variableSplited[1];
-          console.log(variableSplited[0] + " " + variableSplited[1]);
-        }
+
+
+
+
+
+
+
+
+const calculateDataForChart = (array = []) => {
+    const config = { };
+    const math = create(all, config);
+    const parser = math.parser();
+
+    const dataForChart = [];
+    const data = {x: [], y: [], mode: "lines", name: "x"};
+    const remainingExpressions = [...array];
+    const indexesCalculatedExpressions = [];
+
+    let hasError = false;
+
+    for(let i = 0; i <= remainingExpressions.length; i++){
+      indexesCalculatedExpressions.splice(0, indexesCalculatedExpressions.length);
+
+      remainingExpressions.map((expression, index)=>{
+        try{
+          for(let x = -10 ; x <= 10; x++){
+            parser.set('x', x);
+            parser.evaluate(expression.formula);
+            indexesCalculatedExpressions.push(index);
+
+            data.x.push(x);
+            data.y.push(parser.evaluate(expression.formula));
+            console.log("evaluation successful " + expression.formula + " = " + parser.evaluate(expression.formula));
+          }
+        } catch(error){
+            if(!error.message.includes("Undefined symbol")){
+              console.error("Evaluation impossible:", error);
+              hasError = true;
+            }
+          }
+        });
+
+      if(hasError || remainingExpressions.length === 0){
+        break;
+      }
+
+      indexesCalculatedExpressions.map((arrayIndex) => {
+        remainingExpressions.splice(arrayIndex, 1);
       });
+    }
+
+    dataForChart.push(data);
+
+    console.log(remainingExpressions);
+
+    return dataForChart;
+  }
+
+  if(dataChart[j].y[0] !== dataChart[j+1].y[0] && dataChart[j].y.splice(-1) != dataChart[j+1].y.splice(-1)){
+        for(let i = j+1; i < dataChart.length; i++){
+          for(let y = 0; y < dataChart[j].x.length; y++){
+            if(Math.abs(dataChart[j].y[y] - dataChart[i].y[y]) <= 0.1){
+              data.setXandY(dataChart[j].x[y], dataChart[j].y[y]);
+
+              console.log("Intersection Point: y = " +  dataChart[j].y[y] + " x = " + dataChart[j].x[y]);
+            }
+
+            console.log(dataChart[j].y[y] - dataChart[i].y[y]);
+          }
+        }
+      }
+
+      const calculateDataForChart = (arrayExpressions = [], xMin = -10, xMax = 10) => {
+    const config = { };
+    const math = create(all, config);
+    const parser = math.parser();
+
+    const dataForChart = [];
+    const remainingExpressions = [...arrayExpressions];
+    const indexesCalculatedExpressions = [];
+    let data = {};
+    let y = 0;
+
+    let hasError = false;
+
+    for(let i = 0; i <= remainingExpressions.length; i++){
+      indexesCalculatedExpressions.splice(0, indexesCalculatedExpressions.length);
+
+      remainingExpressions.map((expression, index)=>{
+        try{
+          if(expression.includes('y') || expression.includes('x')){
+            data = new DataPrototype();
+
+            for(let x = xMin ; x <= xMax; x += 0.1){
+              parser.set('x', x);
+              y = parser.evaluate(expression);
+
+              data.setXandY(math.round(x, 10), math.round(y, 10));
+              data.setName(expression);
+
+              indexesCalculatedExpressions.push(index);
+
+              console.log("evaluation successful " + expression + " = " + parser.evaluate(expression));
+            }
+
+            dataForChart.push(data);
+          } else {
+            parser.evaluate(expression);
+          }
+        } catch(error){
+            if(!error.message.includes("Undefined symbol")){
+              console.error("Evaluation impossible:", error);
+              hasError = true;
+            }
+          }
+        });
+
+      if(hasError || remainingExpressions.length === 0){
+        break;
+      }
+
+      indexesCalculatedExpressions.map((arrayIndex) => {
+        remainingExpressions.splice(arrayIndex, 1);
+      });
+    }
+
+    if(!hasError && dataForChart.length > 1){//Call function for search intersection points.
+      dataForChart.push(calculateIntersectionPoints(expressions));
+    }
+
+    return dataForChart;
+  }
